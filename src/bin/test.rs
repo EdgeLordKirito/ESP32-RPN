@@ -13,7 +13,7 @@ use esp_hal::{
 };
 
 // use esp_println::println;
-// use log::info;
+use log::info;
 
 use esp_backtrace as _;
 
@@ -31,7 +31,7 @@ fn main() -> ! {
     let _peripherals = esp_hal::init(config);
 
     loop {
-        // info!("{}",add(5, 3));
+        info!("{}", "Testing");
         // println!();
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}
