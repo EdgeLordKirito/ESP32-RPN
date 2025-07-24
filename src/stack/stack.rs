@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, ops::RangeBounds};
 
 const STACK_CAPACITY: usize = 256;
 
@@ -13,29 +13,6 @@ impl Stack {
         Stack {
             data: [None; STACK_CAPACITY],
             top: None,
-        }
-    }
-
-    pub fn push(&mut self, entry: StackEntry) -> Result<(), StackError> {
-        let next = match self.top {
-            None => 0,
-            Some(i) if (i as usize) + 1 <= STACK_CAPACITY => i + 1,
-            Some(_) => return Err(StackError::Overflow),
-        };
-        self.data[next as usize] = Some(entry);
-        self.top = Some(next);
-        Ok(())
-    }
-
-    pub fn pop(&mut self) -> Result<StackEntry, StackError> {
-        match self.top {
-            None => Err(StackError::Underflow),
-            Some(i) => {
-                let val = self.data[i as usize].take().ok_or(StackError::Underflow)?;
-
-                self.top = if i == 0 { None } else { Some(i - 1) };
-                Ok(val)
-            }
         }
     }
 
@@ -75,8 +52,67 @@ impl Stack {
     pub fn len(&self) -> usize {
         match self.top {
             None => 0,
-            Some(index) => index as usize,
+            Some(i) => (i as usize) + 1,
         }
+    }
+}
+
+impl StackOps<StackEntry, StackError> for Stack {
+    fn push(&mut self, entry: StackEntry) -> Result<(), StackError> {
+        let next = match self.top {
+            None => 0,
+            Some(i) if (i as usize) + 1 <= STACK_CAPACITY => i + 1,
+            Some(_) => return Err(StackError::Overflow),
+        };
+        self.data[next as usize] = Some(entry);
+        self.top = Some(next);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Result<StackEntry, StackError> {
+        match self.top {
+            None => Err(StackError::Underflow),
+            Some(i) => {
+                let val = self.data[i as usize].take().ok_or(StackError::Underflow)?;
+
+                self.top = if i == 0 { None } else { Some(i - 1) };
+                Ok(val)
+            }
+        }
+    }
+
+    fn peek(&self) -> Option<&StackEntry> {
+        match self.top {
+            None => None,
+            Some(i) => self.data[i as usize].as_ref(),
+        }
+    }
+    fn peek_range<R>(&self, range: R) -> Result<&[StackEntry], StackError>
+    where
+        R: RangeBounds<usize>,
+    {
+        todo!("need more info about Ranges")
+    }
+    fn empty(&self) -> bool {
+        match self.top {
+            None => true,
+            Some(_) => false,
+        }
+    }
+    fn full(&self) -> bool {
+        self.len() == STACK_CAPACITY
+    }
+    fn clear(&mut self) {
+        for slot in self.data.iter_mut() {
+            *slot = None;
+        }
+        self.top = None;
+    }
+    fn fill(&mut self, item: StackEntry) {
+        for slot in self.data.iter_mut() {
+            *slot = Some(item.clone());
+        }
+        self.top = Some(255);
     }
 }
 
@@ -98,4 +134,17 @@ impl fmt::Display for StackError {
             StackError::Invalid(msg) => write!(f, "Invalid stack state: {}", msg),
         }
     }
+}
+
+pub trait StackOps<T, E> {
+    fn push(&mut self, item: T) -> Result<(), E>;
+    fn pop(&mut self) -> Result<T, E>;
+    fn peek(&self) -> Option<&T>;
+    fn peek_range<R>(&self, range: R) -> Result<&[T], E>
+    where
+        R: RangeBounds<usize>;
+    fn empty(&self) -> bool;
+    fn full(&self) -> bool;
+    fn clear(&mut self);
+    fn fill(&mut self, item: T);
 }
