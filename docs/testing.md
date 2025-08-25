@@ -57,3 +57,22 @@ pub fn run() {
         <name>::run();
     }
 }
+```
+
+
+### 5. Every Test function should be anotated with its feature flag
+To ensure the binary is as slim as possible every test function should be annotated wti its feature flag
+
+```rust
+#[cfg(feature = "stack_tests")]
+pub fn test_stack_new() -> bool {
+    let stack: Stack<i32, 4> = Stack::new();
+    let result = stack.len() == 0 && stack.capacity() == 4;
+    if result {
+        println!("test_stack_new passed");
+    } else {
+        println!("test_stack_new FAILED");
+    }
+    result
+}
+```

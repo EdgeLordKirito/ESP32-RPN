@@ -56,7 +56,7 @@ fn main() -> ! {
 
         // Loop to prevent returning
         loop {
-            println!("Idle...");
+            //println!("Idle...");
             let delay_start = Instant::now();
             while delay_start.elapsed() < Duration::from_millis(500) {}
         }

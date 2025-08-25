@@ -44,7 +44,7 @@ where
     }
 
     /// Returns the maximum capacity of the stack.
-    pub fn capacity() -> usize {
+    pub fn capacity(&self) -> usize {
         N
     }
 
