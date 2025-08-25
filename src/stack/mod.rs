@@ -1,6 +1,5 @@
 //pub mod stack;
 
-mod consts;
 mod traits;
 mod types;
 

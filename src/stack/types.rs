@@ -1,67 +1,82 @@
 use crate::stack::AdvancedStackOps;
 
-use super::consts::STACK_CAPACITY;
 use super::traits::StackOps;
 use core::{fmt, ops::RangeBounds};
 
 // #region Stack
 #[derive(Debug)]
-pub struct Stack {
-    data: [Option<StackEntry>; STACK_CAPACITY],
-    top: Option<u8>,
+pub struct Stack<T, const N: usize> {
+    data: [Option<T>; N],
+    top: Option<usize>,
 }
 
-impl Stack {
+impl<T, const N: usize> Stack<T, N>
+where
+    T: Copy,
+{
+    /// Creates a new, empty stack.
     pub fn new() -> Self {
+        // Safety ruling out the extemes of usize to prevent headache
+        debug_assert!(N > 0, "Stack size N must be > 0");
+        debug_assert!(N < usize::MAX, "Stack size N must be < usize::MAX");
         Stack {
-            data: [None; STACK_CAPACITY],
+            data: [None; N],
             top: None,
         }
     }
 
-    pub fn with<const N: usize>(entries: [StackEntry; N]) -> Result<Self, StackError> {
-        if N > STACK_CAPACITY {
+    /// Creates a stack pre-filled with the given entries.
+    pub fn with<const AMOUNT: usize>(entries: [T; AMOUNT]) -> Result<Self, StackError> {
+        // Safety ruling out the extemes of usize to prevent headache
+        debug_assert!(N > 0, "Stack size N must be > 0");
+        debug_assert!(N < usize::MAX, "Stack size N must be < usize::MAX");
+        if AMOUNT > N {
             return Err(StackError::Overflow);
         }
 
-        let mut data: [Option<StackEntry>; STACK_CAPACITY] = [None; STACK_CAPACITY];
+        let mut data: [Option<T>; N] = [None; N];
         for (i, entry) in entries.into_iter().enumerate() {
             data[i] = Some(entry);
         }
-        let top = if N == 0 { None } else { Some((N - 1) as u8) };
+        let top = if AMOUNT == 0 { None } else { Some(AMOUNT - 1) };
 
         Ok(Stack { data, top })
     }
 
-    pub fn capacity(&self) -> usize {
-        STACK_CAPACITY
+    /// Returns the maximum capacity of the stack.
+    pub fn capacity() -> usize {
+        N
     }
 
+    /// Returns the current number of elements in the stack.
     pub fn len(&self) -> usize {
         match self.top {
             None => 0,
-            Some(i) => (i as usize) + 1,
+            Some(i) => i + 1,
         }
     }
 }
 
-impl StackOps<StackEntry, StackError> for Stack {
-    fn push(&mut self, entry: StackEntry) -> Result<(), StackError> {
+impl<T, const N: usize> StackOps<T> for Stack<T, N>
+where
+    T: Copy,
+{
+    fn push(&mut self, entry: T) -> Result<(), StackError> {
         let next = match self.top {
             None => 0,
-            Some(i) if (i as usize) + 1 <= STACK_CAPACITY => i + 1,
+            Some(i) if i + 1 < N => i + 1,
             Some(_) => return Err(StackError::Overflow),
         };
-        self.data[next as usize] = Some(entry);
+        self.data[next] = Some(entry);
         self.top = Some(next);
         Ok(())
     }
 
-    fn pop(&mut self) -> Result<StackEntry, StackError> {
+    fn pop(&mut self) -> Result<T, StackError> {
         match self.top {
             None => Err(StackError::Underflow),
             Some(i) => {
-                let val = self.data[i as usize].take().ok_or(StackError::Underflow)?;
+                let val = self.data[i].take().ok_or(StackError::Underflow)?;
 
                 self.top = if i == 0 { None } else { Some(i - 1) };
                 Ok(val)
@@ -69,34 +84,36 @@ impl StackOps<StackEntry, StackError> for Stack {
         }
     }
 
-    fn peek(&self) -> Option<&StackEntry> {
+    fn peek(&self) -> Option<&T> {
         match self.top {
             None => None,
-            Some(i) => self.data[i as usize].as_ref(),
+            Some(i) => self.data[i].as_ref(),
         }
     }
 
-    fn peek_range<R>(&self, range: R) -> Result<&[Option<StackEntry>], StackError>
+    fn peek_range<R>(&self, range: R) -> Result<&[Option<T>], StackError>
     where
         R: RangeBounds<usize>,
     {
         use core::ops::Bound;
 
         let start = match range.start_bound() {
-            Bound::Included(&i) => try_usize_to_u8(i, BoundPosition::Start)?,
-            Bound::Excluded(&i) => increment_checked_up_to_u8(i, BoundPosition::Start)?,
+            Bound::Included(&i) => i,
+            Bound::Excluded(&i) => i.checked_add(1).ok_or(StackError::InvalidStartIndex(i))?,
             Bound::Unbounded => 0,
         };
 
         let top_index = match self.top {
-            Some(i) => i as usize,
+            Some(i) => i,
             None => return Err(StackError::Empty),
         };
 
         let end = match range.end_bound() {
-            Bound::Included(&i) => increment_checked_up_to_u8(i, BoundPosition::End)?,
-            Bound::Excluded(&i) => try_usize_to_u8(i, BoundPosition::End)?,
-            Bound::Unbounded => increment_checked_up_to_u8(top_index, BoundPosition::End)?,
+            Bound::Included(&i) => i.checked_add(1).ok_or(StackError::InvalidEndIndex(i))?,
+            Bound::Excluded(&i) => i,
+            Bound::Unbounded => top_index
+                .checked_add(1)
+                .ok_or(StackError::InvalidEndIndex(top_index))?,
         };
 
         if start > end || end > top_index + 1 {
@@ -114,42 +131,41 @@ impl StackOps<StackEntry, StackError> for Stack {
     }
 
     fn full(&self) -> bool {
-        self.len() == STACK_CAPACITY
+        self.len() == N
     }
 
     fn clear(&mut self) {
-        for slot in self.data.iter_mut() {
-            *slot = None;
-        }
+        self.data.fill(None);
         self.top = None;
     }
 
-    fn fill(&mut self, item: StackEntry) {
-        for slot in self.data.iter_mut() {
-            *slot = Some(item.clone());
-        }
-        self.top = Some(255);
+    fn fill(&mut self, item: T) {
+        self.data.fill(Some(item));
+        self.top = Some(N - 1);
     }
 }
 
-impl AdvancedStackOps<StackEntry, StackError> for Stack {
+impl<T, const N: usize> AdvancedStackOps<T> for Stack<T, N>
+where
+    T: Copy,
+{
     fn duplicate(&mut self) -> Result<(), StackError> {
         match self.top {
             None => Err(StackError::Empty),
             Some(i) => {
-                if (i as usize) + 1 >= STACK_CAPACITY {
+                if i + 1 >= N {
                     return Err(StackError::Overflow);
                 }
-                match self.data[i as usize].as_ref() {
-                    Some(entry) => self.push(entry.clone()),
+                match self.data[i].as_ref() {
+                    Some(entry) => self.push(*entry),
                     None => Err(StackError::Invalid("Corrupted stack: no Entry at top")),
                 }
             }
         }
     }
 
-    fn delete_at(&mut self, index: u8) -> Result<StackEntry, StackError> {
-        let idx = index as usize;
+    fn delete_at(&mut self, index: usize) -> Result<T, StackError> {
+        let idx = index;
 
         if self.empty() {
             return Err(StackError::Empty);
@@ -170,7 +186,7 @@ impl AdvancedStackOps<StackEntry, StackError> for Stack {
                 self.top = if top_idx == 0 {
                     None
                 } else {
-                    Some((top_idx - 1) as u8)
+                    Some(top_idx - 1)
                 };
                 Ok(entry)
             }
@@ -180,49 +196,44 @@ impl AdvancedStackOps<StackEntry, StackError> for Stack {
 
     fn swap(&mut self) -> Result<(), StackError> {
         let top = match self.top {
-            Some(i) => i,
             None => return Err(StackError::Empty),
+            Some(0) => return Err(StackError::NotEnoughElements),
+            Some(i) => i,
         };
-        let top_idx = top as usize;
-        let below_idx = top_idx - 1;
-        self.data.swap(top_idx, below_idx);
+        let below_idx = top - 1;
+        self.data.swap(top, below_idx);
         Ok(())
     }
 
-    // Push a copy of the second element from the top onto the stack.
     fn over(&mut self) -> Result<(), StackError> {
         let top = match self.top {
+            Some(0) => return Err(StackError::NotEnoughElements),
             Some(i) => i,
-            None => 0,
+            None => return Err(StackError::Empty),
         };
-        if top == 0 {
-            return Err(StackError::Empty);
-        }
-        let below = self.data[(top - 1) as usize].clone();
+        let below = self.data[top - 1].clone();
         self.push(below.expect("expected entry 'below top' to be 'some' no 'none'"))
     }
 
-    // Insert a copy of the top element just below the second element or first if there is no second element.
     fn tuck(&mut self) -> Result<(), StackError> {
         let top = match self.top {
+            Some(0) => return self.duplicate(),
             Some(i) => i,
             None => return Err(StackError::Empty),
         };
 
-        if top == 0 {
-            // No second element, just duplicate the top
-            return self.duplicate();
+        if top + 1 >= N {
+            return Err(StackError::Overflow);
         }
 
-        let top_idx = top as usize;
-        let top_entry = self.data[top_idx].clone().expect("expected top to be Some");
+        let top_entry = self.data[top].expect("expected top to be Some");
 
         // Scary needs testing since indexing stuff and i am bad at that
-        for i in (top_idx..self.data.len() - 1).rev() {
-            self.data[i + 1] = self.data[i].take();
+        for i in (1..=top).rev() {
+            self.data[i + 1] = self.data[i];
         }
 
-        self.data[top_idx - 1] = Some(top_entry);
+        self.data[top - 1] = Some(top_entry);
 
         self.top = Some(top + 1);
 
@@ -237,10 +248,11 @@ pub enum StackError {
     Overflow,
     Underflow,
     Empty,
+    NotEnoughElements,
     Invalid(&'static str),
-    InvalidRange(usize, usize, usize),
     InvalidStartIndex(usize),
     InvalidEndIndex(usize),
+    InvalidRange(usize, usize, usize),
 }
 
 impl fmt::Display for StackError {
@@ -250,6 +262,7 @@ impl fmt::Display for StackError {
             StackError::Underflow => write!(f, "Stack Underflow"),
             StackError::Invalid(msg) => write!(f, "Invalid stack state: {}", msg),
             StackError::Empty => write!(f, "Stack is empty"),
+            StackError::NotEnoughElements => write!(f, "Operation requires more Arguments"),
             StackError::InvalidRange(start, end, top) => write!(
                 f,
                 "The Range from {} to {} is invalid for stack with top {}",
@@ -266,36 +279,3 @@ impl fmt::Display for StackError {
     }
 }
 // #endregion StackError
-
-#[derive(Clone, Copy, Debug)]
-pub enum StackEntry {
-    Dummy, // Placeholder for actual stack entry types
-}
-
-// #region helper_functions
-#[derive(Clone, Copy, Debug)]
-enum BoundPosition {
-    Start,
-    End,
-}
-
-fn try_usize_to_u8(val: usize, bound_pos: BoundPosition) -> Result<usize, StackError> {
-    u8::try_from(val)
-        .map(|v| v as usize)
-        .map_err(|_| to_invalid_index_err(bound_pos, val))
-}
-
-fn increment_checked_up_to_u8(val: usize, bound_pos: BoundPosition) -> Result<usize, StackError> {
-    let inc = val
-        .checked_add(1)
-        .ok_or(to_invalid_index_err(bound_pos, val))?;
-    try_usize_to_u8(inc, bound_pos)
-}
-
-fn to_invalid_index_err(pos: BoundPosition, index: usize) -> StackError {
-    match pos {
-        BoundPosition::Start => StackError::InvalidStartIndex(index),
-        BoundPosition::End => StackError::InvalidEndIndex(index),
-    }
-}
-// #endregion helper_functions
