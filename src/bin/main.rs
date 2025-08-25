@@ -12,7 +12,7 @@ use esp_hal::{
     time::{Duration, Instant},
 };
 
-// use esp_println::println;
+use esp_println::println;
 // use log::info;
 
 use esp_backtrace as _;
@@ -25,16 +25,41 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     // generator version: 0.4.0
 
-    esp_println::logger::init_logger_from_env();
+    #[cfg(not(feature = "test"))]
+    {
+        // --- Normal production firmware branch ---
+        esp_println::logger::init_logger_from_env();
+        let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+        let _peripherals = esp_hal::init(config);
 
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let _peripherals = esp_hal::init(config);
+        // Production code goes here
+        println!("Running production firmware...");
 
-    loop {
-        // info!("{}",add(5, 3));
-        // println!();
-        let delay_start = Instant::now();
-        while delay_start.elapsed() < Duration::from_millis(500) {}
+        loop {
+            let delay_start = Instant::now();
+            while delay_start.elapsed() < Duration::from_millis(500) {}
+        }
+    }
+
+    #[cfg(feature = "test")]
+    {
+        // #region test specific usings start
+        use rpn::esp_test;
+        // #endregion test specific usings end
+        // --- Test firmware branch ---
+        esp_println::logger::init_logger_from_env();
+        let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+        let _peripherals = esp_hal::init(config);
+
+        // Call the test framework
+        esp_test::entry::run();
+
+        // Loop to prevent returning
+        loop {
+            println!("Idle...");
+            let delay_start = Instant::now();
+            while delay_start.elapsed() < Duration::from_millis(500) {}
+        }
     }
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0-beta.1/examples/src/bin
