@@ -43,20 +43,21 @@ fn main() -> ! {
 
     #[cfg(feature = "test")]
     {
+        // --- Test firmware branch ---
         // #region test specific usings start
         use rpn::esp_test;
         // #endregion test specific usings end
-        // --- Test firmware branch ---
         esp_println::logger::init_logger_from_env();
         let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
         let _peripherals = esp_hal::init(config);
+
+        println!("Running test firmware...");
 
         // Call the test framework
         esp_test::entry::run();
 
         // Loop to prevent returning
         loop {
-            //println!("Idle...");
             let delay_start = Instant::now();
             while delay_start.elapsed() < Duration::from_millis(500) {}
         }

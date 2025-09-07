@@ -4,6 +4,7 @@ use super::traits::StackOps;
 use core::{fmt, ops::RangeBounds};
 
 // #region Stack
+/// Generic Stack top points to the top most set entry
 #[derive(Debug)]
 pub struct Stack<T, const N: usize> {
     data: [Option<T>; N],
@@ -41,6 +42,24 @@ where
         let top = if AMOUNT == 0 { None } else { Some(AMOUNT - 1) };
 
         Ok(Stack { data, top })
+    }
+
+    /// Exposes the underlying data with the end being at top
+    pub fn as_slice(&self) -> &[Option<T>] {
+        match self.top {
+            None => &[],
+            Some(top) => &self.data[..=top],
+        }
+    }
+
+    /// Provides a Iterator over the Stack values
+    pub fn iter(&self) -> StackIter<'_, T> {
+        let len = self.len();
+        StackIter {
+            data: &self.data[..len],
+            front: 0,
+            back: len,
+        }
     }
 
     /// Returns the maximum capacity of the stack.
@@ -243,7 +262,7 @@ where
 // #endregion Stack
 
 // #region StackError
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum StackError {
     Overflow,
     Underflow,
@@ -279,3 +298,44 @@ impl fmt::Display for StackError {
     }
 }
 // #endregion StackError
+
+// #region StackIterator
+pub struct StackIter<'a, T> {
+    data: &'a [Option<T>],
+    front: usize, // next element from the front
+    back: usize,  // next element from the back (exclusive)
+}
+
+impl<'a, T: Copy> Iterator for StackIter<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            None
+        } else {
+            let val = self.data[self.front].expect("Initialized element should be Some");
+            self.front += 1;
+            Some(val)
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.back.saturating_sub(self.front);
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, T: Copy> DoubleEndedIterator for StackIter<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front >= self.back {
+            None
+        } else {
+            self.back -= 1;
+            let val = self.data[self.back].expect("Initialized element should be Some");
+            Some(val)
+        }
+    }
+}
+
+impl<'a, T: Copy> ExactSizeIterator for StackIter<'a, T> {}
+// #endregion StackIterator

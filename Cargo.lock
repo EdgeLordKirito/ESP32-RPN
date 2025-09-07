@@ -808,7 +808,9 @@ dependencies = [
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
+ "itoa",
  "log",
+ "ryu",
 ]
 
 [[package]]
